@@ -1,0 +1,3 @@
+[submodule "vendor/submod"]
+	path = vendor/submod
+	url = git@github.com:lunst97/ruby-guessing-game.git
