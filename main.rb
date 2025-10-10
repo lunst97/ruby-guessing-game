@@ -2,8 +2,6 @@ require_relative 'game'
 require_relative 'utils'
 #dd
 
-#33
-
 def main
   loop do
     game = Game.new
