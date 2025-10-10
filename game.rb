@@ -16,7 +16,7 @@ class Game
     
     game_loop
   end
-
+#TODO:
   private
 
   def game_loop
