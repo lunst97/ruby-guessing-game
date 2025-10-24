@@ -16,10 +16,28 @@ jobs:
         uses: ruby/setup-ruby@v1
         with:
           ruby-version: '3.2'
-          bundler-cache: true
           
       - name: Install dependencies
-        run: bundle install
+        run: |
+          bundle lock --add-platform x86_64-linux
+          bundle install
           
       - name: Run RSpec tests
         run: bundle exec rspec
+        
+      - name: Test Summary
+        if: always()
+        run: echo "Tests completed"
+
+  auto-merge:
+    needs: test
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request' && github.actor == 'lunst97'
+    steps:
+      - name: Auto merge PR
+        uses: pascalgn/automerge-action@v0.15.6
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          MERGE_LABELS: "automerge,!work in progress"
+          MERGE_METHOD: "squash"
+          MERGE_COMMIT_MESSAGE: "pull-request-title"
