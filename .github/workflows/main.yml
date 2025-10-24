@@ -6,6 +6,11 @@ on:
   pull_request:
     branches: [ main ]
 
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+
 jobs:
   test:
     runs-on: ubuntu-latest
@@ -44,6 +49,8 @@ jobs:
     needs: test
     runs-on: ubuntu-latest
     if: github.ref == 'refs/heads/main'
+    permissions:
+      contents: write
     steps:
       - uses: actions/checkout@v4
       
@@ -58,8 +65,8 @@ jobs:
           
           # Копировать основную документацию
           cp README.md docs/index.md
-          cp CHANGELOG.md docs/ || echo "CHANGELOG.md not found"
-          cp VERSION docs/ || echo "1.0.0" > docs/VERSION
+          cp CHANGELOG.md docs/ 2>/dev/null || echo "# Changelog" > docs/CHANGELOG.md
+          cp VERSION docs/ 2>/dev/null || echo "1.0.0" > docs/VERSION
           
           # Создать страницу документации
           cat > docs/documentation.md << 'DOCS'
@@ -107,10 +114,10 @@ jobs:
           
       - name: Deploy documentation
         uses: peaceiris/actions-gh-pages@v4
-        if: github.ref == 'refs/heads/main'
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           publish_dir: ./docs
+          force_orphan: true
           
       - name: Upload documentation artifact
         uses: actions/upload-artifact@v4
