@@ -1,7 +1,7 @@
 require_relative 'player'
 require_relative 'utils'
-#4
 
+# New feature: difficulty levels
 class Game
   def initialize
     @secret_number = rand(1..100)
