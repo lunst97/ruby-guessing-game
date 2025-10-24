@@ -6,11 +6,17 @@ on:
   pull_request:
     branches: [ main ]
 
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+  pull-requests: write
+
 jobs:
   test:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       
       - name: Setup Ruby
         uses: ruby/setup-ruby@v1
@@ -23,21 +29,149 @@ jobs:
           bundle install
           
       - name: Run RSpec tests
-        run: bundle exec rspec
+        run: bundle exec rspec --format documentation
         
-      - name: Test Summary
+      - name: Generate test report
         if: always()
-        run: echo "Tests completed"
+        run: |
+          echo "# Test Report" > test-report.md
+          echo "Date: $(date)" >> test-report.md
+          echo "Branch: ${{ github.ref_name }}" >> test-report.md
+          bundle exec rspec --format documentation >> test-report.md
+          
+      - name: Upload test report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-report
+          path: test-report.md
 
-  auto-merge:
+  create-pr:
     needs: test
     runs-on: ubuntu-latest
-    if: github.event_name == 'pull_request' && github.actor == 'lunst97'
+    if: github.ref == 'refs/heads/development' && github.event_name == 'push'
+    permissions:
+      contents: write
+      pull-requests: write
     steps:
-      - name: Auto merge PR
-        uses: pascalgn/automerge-action@v0.15.6
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      
+      - name: Create Pull Request
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          MERGE_LABELS: "automerge,!work in progress"
-          MERGE_METHOD: "squash"
-          MERGE_COMMIT_MESSAGE: "pull-request-title"
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # Проверяем есть ли уже открытый PR
+          EXISTING_PR=$(gh pr list --base main --head development --json number --jq '.[0].number')
+          
+          if [ -z "$EXISTING_PR" ]; then
+            echo "Creating new PR..."
+            gh pr create \
+              --title "🔀 Auto-merge: development → main" \
+              --body "Автоматический PR из development в main после успешного прохождения тестов.
+              
+              Коммит: ${{ github.sha }}
+              Автор: ${{ github.actor }}
+              
+              Тесты пройдены ✅" \
+              --base main \
+              --head development
+          else
+            echo "PR already exists: #$EXISTING_PR"
+          fi
+      
+      - name: Auto-merge PR
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # Получаем номер PR
+          PR_NUMBER=$(gh pr list --base main --head development --json number --jq '.[0].number')
+          
+          if [ ! -z "$PR_NUMBER" ]; then
+            echo "Auto-merging PR #$PR_NUMBER..."
+            gh pr merge $PR_NUMBER --squash --auto --delete-branch=false
+          fi
+
+  documentation:
+    needs: test
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Setup Ruby
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: '3.2'
+          
+      - name: Generate documentation
+        run: |
+          mkdir -p docs
+          
+          # Копировать основную документацию
+          cp README.md docs/index.md
+          cp CHANGELOG.md docs/ 2>/dev/null || echo "# Changelog" > docs/CHANGELOG.md
+          cp VERSION docs/ 2>/dev/null || echo "1.0.0" > docs/VERSION
+          
+          # Создать страницу документации
+          cat > docs/documentation.md << 'DOCS'
+          # Документация проекта
+          
+          ## Обзор
+          Ruby Calculator - калькулятор для базовых математических операций.
+          
+          ## Установка
+          См. [README](index.md)
+          
+          ## API Reference
+          
+          ### Calculator Class
+          Основной класс калькулятора
+          
+          #### Методы:
+          - `add(a, b)` - сложение
+          - `subtract(a, b)` - вычитание
+          - `multiply(a, b)` - умножение
+          - `divide(a, b)` - деление
+          
+          ## Тестирование
+          Проект покрыт тестами с использованием RSpec.
+          
+          ## CI/CD
+          Автоматическое тестирование и деплой через GitHub Actions.
+          DOCS
+          
+          # Создать индексную страницу
+          cat > docs/README.md << 'INDEX'
+          # Ruby Calculator - Документация
+          
+          Добро пожаловать в документацию проекта!
+          
+          ## Разделы
+          
+          - [Главная страница](index.md)
+          - [Полная документация](documentation.md)
+          - [История изменений](CHANGELOG.md)
+          
+          ## Версия
+          INDEX
+          cat docs/VERSION >> docs/README.md
+          
+          echo "✅ Документация сгенерирована: $(date)" > docs/BUILD_INFO.txt
+          ls -la docs/
+          
+      - name: Deploy documentation
+        uses: peaceiris/actions-gh-pages@v4
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./docs
+          force_orphan: true
+          
+      - name: Upload documentation artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: documentation
+          path: docs/
