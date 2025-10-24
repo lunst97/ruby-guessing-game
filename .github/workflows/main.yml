@@ -12,13 +12,14 @@ jobs:
     steps:
       - uses: actions/checkout@v3
       
-      - name: Setup Node.js
-        uses: actions/setup-node@v3
+      - name: Setup Ruby
+        uses: ruby/setup-ruby@v1
         with:
-          node-version: '18'
+          ruby-version: '3.2'
+          bundler-cache: true
           
       - name: Install dependencies
-        run: npm install
-        
-      - name: Run tests
-        run: npm test
+        run: bundle install
+          
+      - name: Run RSpec tests
+        run: bundle exec rspec
